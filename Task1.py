@@ -24,11 +24,10 @@ def euler_maruyama(X0, h, snapshots, D, u):
     return snapshots
 
 # Setup 4 subplots
-fig, axes = plt.subplots(2, 2, figsize=(14, 6))
+fig, axes = plt.subplots(2, 2, figsize=(14, 7))
 axes = axes.flatten()
 
 for i in range(N):
-    snapshots = {15: None, 30: None, 45: None, 60: None}  # reset for each particle
     result = euler_maruyama(X0, h, snapshots, D, u)       # store return value separately
 
     for j, t in enumerate(result):
