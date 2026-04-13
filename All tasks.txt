@@ -1,0 +1,135 @@
+"""
+Miniproject 1: Pollutant Dispersion
+Tasks 1, 2, and 3 — shows all plots interactively, saves nothing.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+# ── Parameters ────────────────────────────────────────────────────────────────
+D      = 0.02
+u      = np.array([0.3, 0.0])
+h      = 0.1
+T      = 60.0
+TIMES  = [15, 30, 45, 60]
+X_LIM  = (0, 25)
+Y_LIM  = (-5, 5)
+EPS    = 0.1        # Gaussian kernel width for concentration estimate
+
+# Evaluation grid for concentration (200 x 100)
+NX, NY  = 200, 100
+xg      = np.linspace(*X_LIM, NX)
+yg      = np.linspace(*Y_LIM, NY)
+XX, YY  = np.meshgrid(xg, yg)
+GRID    = np.column_stack([XX.ravel(), YY.ravel()])   # (20000, 2)
+
+
+# ── Euler-Maruyama step ───────────────────────────────────────────────────────
+def em_step(X):
+    """Advance all particles one time step. X: (N, 2)"""
+    return X + u * h + np.sqrt(2 * D * h) * np.random.randn(*X.shape)
+
+
+# ── Concentration estimate (eq. 0.5) ─────────────────────────────────────────
+def concentration(particles, batch=1000):
+    """Gaussian-kernel concentration on GRID. Works in batches to save memory."""
+    N = len(particles)
+    if N == 0:
+        return np.zeros(len(GRID))
+    C = np.zeros(len(GRID))
+    for i in range(0, len(GRID), batch):
+        d  = GRID[i:i+batch, np.newaxis, :] - particles[np.newaxis, :, :]  # (B,N,2)
+        r2 = (d ** 2).sum(axis=2)                                           # (B,N)
+        C[i:i+batch] = np.exp(-r2 / (2 * EPS**2)).sum(axis=1) / (2 * np.pi * EPS**2 * N)
+    return C
+
+
+# ── Plot helpers ──────────────────────────────────────────────────────────────
+def show_clouds(clouds, title):
+    fig, axes = plt.subplots(2, 2, figsize=(13, 6))
+    fig.suptitle(title, fontsize=13, fontweight='bold')
+    for ax, t in zip(axes.ravel(), TIMES):
+        pts = clouds[t]
+        ax.scatter(pts[:, 0], pts[:, 1], s=1, alpha=0.35, color='steelblue')
+        ax.set(xlim=X_LIM, ylim=Y_LIM, title=f't = {t} s  (N={len(pts)})',
+               xlabel='x', ylabel='y', aspect='equal')
+    fig.tight_layout()
+
+
+def show_concentration(concs, title):
+    vmax   = max(c.max() for c in concs.values())
+    levels = np.linspace(0, vmax, 60)
+
+    fig = plt.figure(figsize=(13, 6))
+    fig.suptitle(title, fontsize=13, fontweight='bold')
+    gs  = gridspec.GridSpec(2, 2, figure=fig, hspace=0.45, wspace=0.3)
+
+    last_cf = None
+    for idx, t in enumerate(TIMES):
+        ax = fig.add_subplot(gs[idx // 2, idx % 2])
+        C  = concs[t].reshape(NY, NX)
+        last_cf = ax.contourf(XX, YY, C, levels=levels, cmap='hot_r')
+        ax.set(xlim=X_LIM, ylim=Y_LIM, title=f't = {t} s',
+               xlabel='x', ylabel='y', aspect='equal')
+
+    cb_ax = fig.add_axes([0.15, 0.02, 0.7, 0.025])
+    fig.colorbar(last_cf, cax=cb_ax, orientation='horizontal', label='C(x, t)')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TASKS 1 & 2  —  Fixed release of N = 2000 particles at t = 0
+# ═══════════════════════════════════════════════════════════════════════════════
+print("Tasks 1 & 2: fixed release…")
+
+N      = 2000
+X      = np.zeros((N, 2))        # all particles start at origin
+snaps  = {int(t / h): t for t in TIMES}
+
+clouds_12 = {}
+concs_12  = {}
+
+for step in range(1, int(T / h) + 1):
+    X = em_step(X)
+    if step in snaps:
+        t = snaps[step]
+        clouds_12[t] = X.copy()
+        concs_12[t]  = concentration(X)
+        print(f"  t = {t}s done")
+
+show_clouds(clouds_12,       "Task 1 — Particle Cloud (fixed release, N=2000)")
+show_concentration(concs_12, "Task 2 — Concentration Field (fixed release, N=2000)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TASK 3  —  Continuous point source at xs = (0, 0), Q = 100 particles/s
+# ═══════════════════════════════════════════════════════════════════════════════
+print("\nTask 3: continuous source…")
+
+Q         = 100
+xs        = np.array([0.0, 0.0])
+particles = np.empty((0, 2))
+
+clouds_3 = {}
+concs_3  = {}
+
+for step in range(1, int(T / h) + 1):
+    # Inject floor(Q*h) new particles at the source
+    n_new = int(Q * h)
+    if n_new > 0:
+        new = np.tile(xs, (n_new, 1))
+        particles = np.vstack([particles, new]) if len(particles) else new
+
+    particles = em_step(particles)
+
+    if step in snaps:
+        t = snaps[step]
+        clouds_3[t] = particles.copy()
+        concs_3[t]  = concentration(particles)
+        print(f"  t = {t}s  (N={len(particles)}) done")
+
+show_clouds(clouds_3,       "Task 3 — Particle Cloud (continuous source, Q=100 p/s)")
+show_concentration(concs_3, "Task 3 — Concentration Field (continuous source, Q=100 p/s)")
+
+print("\nDone — displaying all plots.")
+plt.show()
