@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 D = 0.02
 u = np.array([0.3, 0.0])
 
-Q = 100              # particles per second
-h = 0.1              # time step
+Q = 100              
+h = 0.1             
 T = 60
 
 snapshots = {15: [], 30: [], 45: [], 60: []}
